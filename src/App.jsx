@@ -1,5 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TrendingUp, DollarSign, Bitcoin, AlertTriangle, Info, Clock } from 'lucide-react';
+
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+const readParam = (key, def, lo, hi) => {
+  const v = Number(new URLSearchParams(window.location.search).get(key));
+  return isNaN(v) ? def : clamp(v, lo, hi);
+};
 
 const i18n = {
   en: {
@@ -109,14 +116,39 @@ const i18n = {
 };
 
 export default function App() {
-  const [lang, setLang] = useState('zh');
-  const [investment, setInvestment] = useState(10000);
-  const [initialPrice, setInitialPrice] = useState(50000);
-  const [finalPrice, setFinalPrice] = useState(50000);
-  const [durationDays, setDurationDays] = useState(365);
-  const [feeApr, setFeeApr] = useState(15);
-  const [farmApr, setFarmApr] = useState(30);
-  const [rewardRetention, setRewardRetention] = useState(70);
+  const [lang, setLang] = useState(() => {
+    const v = new URLSearchParams(window.location.search).get('lang');
+    return v === 'en' ? 'en' : 'zh';
+  });
+  const [investment, setInvestment] = useState(() => readParam('inv', 10000, 1000, 100000));
+  const [initialPrice, setInitialPrice] = useState(() => readParam('p0', 50000, 10000, 150000));
+  const [finalPrice, setFinalPrice] = useState(() => readParam('p1', 50000, 10000, 150000));
+  const [durationDays, setDurationDays] = useState(() => readParam('d', 365, 7, 730));
+  const [feeApr, setFeeApr] = useState(() => readParam('fa', 15, 0, 50));
+  const [farmApr, setFarmApr] = useState(() => readParam('fm', 30, 0, 200));
+  const [rewardRetention, setRewardRetention] = useState(() => readParam('ret', 70, 0, 100));
+
+  useEffect(() => {
+    const p = new URLSearchParams();
+    if (lang !== 'zh') p.set('lang', lang);
+    if (investment !== 10000) p.set('inv', investment);
+    if (initialPrice !== 50000) p.set('p0', initialPrice);
+    if (finalPrice !== 50000) p.set('p1', finalPrice);
+    if (durationDays !== 365) p.set('d', durationDays);
+    if (feeApr !== 15) p.set('fa', feeApr);
+    if (farmApr !== 30) p.set('fm', farmApr);
+    if (rewardRetention !== 70) p.set('ret', rewardRetention);
+    const qs = p.toString();
+    window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
+  }, [lang, investment, initialPrice, finalPrice, durationDays, feeApr, farmApr, rewardRetention]);
+
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 640px)').matches);
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 640px)');
+    const h = (e) => setMobile(e.matches);
+    mql.addEventListener('change', h);
+    return () => mql.removeEventListener('change', h);
+  }, []);
 
   const t = i18n[lang];
 
@@ -191,7 +223,7 @@ export default function App() {
   const formatPct = (v) =>
     new Intl.NumberFormat('en-US', { signDisplay: 'always', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + '%';
 
-  const p = (n, s, pl) => `${n} ${n === 1 ? s : pl}`;
+  const pl = (n, s, pp) => `${n} ${n === 1 ? s : pp}`;
 
   const formatDuration = (days) => {
     if (lang === 'zh') {
@@ -202,14 +234,14 @@ export default function App() {
       const rm = Math.round((days % 365) / 30);
       return rm > 0 ? `${y} \u5e74 ${rm} \u500b\u6708 (${days} \u5929)` : `${y} \u5e74 (${days} \u5929)`;
     }
-    if (days < 30) return p(days, 'day', 'days');
+    if (days < 30) return pl(days, 'day', 'days');
     const m = Math.round(days / 30);
-    if (days < 365) return `${p(m, 'month', 'months')} (${p(days, 'day', 'days')})`;
+    if (days < 365) return `${pl(m, 'month', 'months')} (${pl(days, 'day', 'days')})`;
     const y = Math.floor(days / 365);
     const rm = Math.round((days % 365) / 30);
     return rm > 0
-      ? `${p(y, 'year', 'years')} ${p(rm, 'month', 'months')} (${p(days, 'day', 'days')})`
-      : `${p(y, 'year', 'years')} (${p(days, 'day', 'days')})`;
+      ? `${pl(y, 'year', 'years')} ${pl(rm, 'month', 'months')} (${pl(days, 'day', 'days')})`
+      : `${pl(y, 'year', 'years')} (${pl(days, 'day', 'days')})`;
   };
 
   const priceChangePct = ((finalPrice - initialPrice) / initialPrice) * 100;
@@ -225,22 +257,38 @@ export default function App() {
     purple: '#7C3AED', purpleBg: '#F5F3FF', purpleBorder: '#C4B5FD',
   };
 
-  const card = { background: c.surface, borderRadius: 16, border: `1px solid ${c.border}`, padding: 24 };
-  const slider = (color) => ({ width: '100%', height: 6, borderRadius: 3, appearance: 'none', WebkitAppearance: 'none', outline: 'none', background: c.surfaceAlt, cursor: 'pointer', accentColor: color });
+  const card = { background: c.surface, borderRadius: 16, border: `1px solid ${c.border}`, padding: mobile ? 16 : 24 };
+  const sld = (color) => ({ flex: 1, height: 6, borderRadius: 3, appearance: 'none', WebkitAppearance: 'none', outline: 'none', background: c.surfaceAlt, cursor: 'pointer', accentColor: color });
   const secLabel = { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: c.textTertiary, marginBottom: 16 };
 
+  const numIn = (w) => ({
+    width: w, minWidth: w, padding: '4px 6px', border: `1px solid ${c.border}`, borderRadius: 6,
+    background: c.surface, color: c.text, fontSize: 12, fontWeight: 600, textAlign: 'right',
+    outline: 'none', fontFamily: 'inherit', MozAppearance: 'textfield',
+  });
+
+  const sliderRow = (color, value, setter, min, max, step, w) => (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => setter(Number(e.target.value))} style={sld(color)} />
+      <input type="number" value={value} min={min} max={max} step={step}
+        onChange={(e) => setter(Number(e.target.value))}
+        onBlur={() => setter((v) => clamp(v, min, max))}
+        style={numIn(w)} />
+    </div>
+  );
+
   return (
-    <div style={{ minHeight: '100vh', background: c.bg, color: c.text, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", padding: '24px 16px' }}>
+    <div style={{ minHeight: '100vh', background: c.bg, color: c.text, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", padding: mobile ? '16px 8px' : '24px 16px' }}>
       <div style={{ maxWidth: 960, margin: '0 auto' }}>
 
         {/* Header */}
-        <div style={{ ...card, marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+        <div style={{ ...card, marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: mobile ? 10 : 14, flexWrap: 'wrap' }}>
           <div style={{ padding: 10, background: c.accentBg, borderRadius: 12, lineHeight: 0, flexShrink: 0 }}>
             <TrendingUp size={26} color={c.accent} />
           </div>
-          <div style={{ flex: 1 }}>
-            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: -0.5 }}>{t.title}</h1>
-            <p style={{ margin: '6px 0 0', fontSize: 14, color: c.textSecondary, lineHeight: 1.5 }}>{t.subtitle}</p>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <h1 style={{ fontSize: mobile ? 20 : 24, fontWeight: 700, margin: 0, letterSpacing: -0.5 }}>{t.title}</h1>
+            <p style={{ margin: '6px 0 0', fontSize: mobile ? 13 : 14, color: c.textSecondary, lineHeight: 1.5 }}>{t.subtitle}</p>
           </div>
           <button
             onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
@@ -253,37 +301,37 @@ export default function App() {
         {/* Basic Settings */}
         <div style={{ ...card, marginBottom: 12 }}>
           <div style={secLabel}>{t.basicSettings}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap: mobile ? 20 : 32 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: 13, fontWeight: 600 }}>
                   <span style={{ color: c.textSecondary }}>{t.investment}</span>
                   <span style={{ color: c.blue }}>{formatUsd(investment)}</span>
                 </div>
-                <input type="range" min="1000" max="100000" step="1000" value={investment} onChange={(e) => setInvestment(Number(e.target.value))} style={slider(c.blue)} />
+                {sliderRow(c.blue, investment, setInvestment, 1000, 100000, 1000, 72)}
               </div>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: 13, fontWeight: 600 }}>
                   <span style={{ color: c.textSecondary, display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={13} />{t.duration}</span>
                   <span style={{ color: c.purple }}>{formatDuration(durationDays)}</span>
                 </div>
-                <input type="range" min="7" max="730" step="1" value={durationDays} onChange={(e) => setDurationDays(Number(e.target.value))} style={slider(c.purple)} />
+                {sliderRow(c.purple, durationDays, setDurationDays, 7, 730, 1, 52)}
               </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: 13, fontWeight: 600 }}>
                   <span style={{ color: c.textSecondary }}>{t.entryPrice}</span>
                   <span style={{ color: c.orange }}>{formatUsd(initialPrice)}</span>
                 </div>
-                <input type="range" min="10000" max="150000" step="1000" value={initialPrice} onChange={(e) => setInitialPrice(Number(e.target.value))} style={slider(c.orange)} />
+                {sliderRow(c.orange, initialPrice, setInitialPrice, 10000, 150000, 1000, 72)}
               </div>
               <div style={{ background: c.orangeBg, border: `1px solid ${c.orangeBorder}`, borderRadius: 12, padding: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: 13, fontWeight: 600 }}>
                   <span style={{ color: c.textSecondary }}>{t.exitPrice}</span>
                   <span style={{ color: c.orange, fontSize: 18, fontWeight: 800 }}>{formatUsd(finalPrice)}</span>
                 </div>
-                <input type="range" min="10000" max="150000" step="1000" value={finalPrice} onChange={(e) => setFinalPrice(Number(e.target.value))} style={slider(c.orange)} />
+                {sliderRow(c.orange, finalPrice, setFinalPrice, 10000, 150000, 1000, 72)}
                 <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: priceChangePct >= 0 ? c.green : c.red }}>
                   {formatPct(priceChangePct)} {t.priceChange}
                 </div>
@@ -295,13 +343,13 @@ export default function App() {
         {/* Yield Sources */}
         <div style={{ ...card, marginBottom: 20 }}>
           <div style={secLabel}>{t.yieldSources}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr 1fr', gap: mobile ? 20 : 24 }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: 13, fontWeight: 600 }}>
                 <span style={{ color: c.textSecondary }}>{t.feeApr}</span>
                 <span style={{ color: c.green, fontSize: 15, fontWeight: 700 }}>{feeApr}%</span>
               </div>
-              <input type="range" min="0" max="50" step="1" value={feeApr} onChange={(e) => setFeeApr(Number(e.target.value))} style={slider(c.green)} />
+              {sliderRow(c.green, feeApr, setFeeApr, 0, 50, 1, 44)}
               <div style={{ marginTop: 6, fontSize: 11, color: c.textTertiary }}>{t.feeDesc}</div>
             </div>
             <div>
@@ -309,7 +357,7 @@ export default function App() {
                 <span style={{ color: c.textSecondary }}>{t.farmApr}</span>
                 <span style={{ color: c.accent, fontSize: 15, fontWeight: 700 }}>{farmApr}%</span>
               </div>
-              <input type="range" min="0" max="200" step="5" value={farmApr} onChange={(e) => setFarmApr(Number(e.target.value))} style={slider(c.accent)} />
+              {sliderRow(c.accent, farmApr, setFarmApr, 0, 200, 5, 44)}
               <div style={{ marginTop: 6, fontSize: 11, color: c.textTertiary }}>{t.farmDesc}</div>
             </div>
             <div>
@@ -317,14 +365,14 @@ export default function App() {
                 <span style={{ color: c.textSecondary }}>{t.retention}</span>
                 <span style={{ color: results.farmDepreciationLoss > 0 ? c.red : c.green, fontSize: 15, fontWeight: 700 }}>{rewardRetention}%</span>
               </div>
-              <input type="range" min="0" max="100" step="5" value={rewardRetention} onChange={(e) => setRewardRetention(Number(e.target.value))} style={slider(c.red)} />
+              {sliderRow(c.red, rewardRetention, setRewardRetention, 0, 100, 5, 44)}
               <div style={{ marginTop: 6, fontSize: 11, color: c.textTertiary }}>{t.retentionDesc}</div>
             </div>
           </div>
         </div>
 
         {/* Scenario A & B */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap: 20, marginBottom: 20 }}>
           {/* A — USDC */}
           <div style={{ ...card, background: results.usdcProfit >= 0 ? c.blueBg : c.redBg, border: `2px solid ${results.usdcProfit >= 0 ? c.blueBorder : c.redBorder}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
@@ -342,7 +390,7 @@ export default function App() {
             ))}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0' }}>
               <span style={{ fontSize: 13, color: c.textSecondary }}>{t.pnl}</span>
-              <span style={{ fontSize: 24, fontWeight: 800, color: results.usdcProfit >= 0 ? c.blue : c.red }}>
+              <span style={{ fontSize: mobile ? 20 : 24, fontWeight: 800, color: results.usdcProfit >= 0 ? c.blue : c.red }}>
                 {results.usdcProfit >= 0 ? '+' : ''}{formatUsd(results.usdcProfit)}
               </span>
             </div>
@@ -378,7 +426,7 @@ export default function App() {
             ))}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0' }}>
               <span style={{ fontSize: 13, color: c.textSecondary }}>{t.pnlCoins}</span>
-              <span style={{ fontSize: 24, fontWeight: 800, color: results.btcProfit >= 0 ? c.orange : c.red }}>
+              <span style={{ fontSize: mobile ? 20 : 24, fontWeight: 800, color: results.btcProfit >= 0 ? c.orange : c.red }}>
                 {results.btcProfit >= 0 ? '+' : ''}{formatBtc(results.btcProfit)}
               </span>
             </div>
@@ -403,25 +451,25 @@ export default function App() {
           <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <DollarSign size={18} color={c.textTertiary} />{t.yieldTitle}
           </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16 }}>
-            <div style={{ padding: 16, background: c.greenBg, borderRadius: 12, border: `1px solid ${c.greenBorder}` }}>
+          <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr 1fr' : '1fr 1fr 1fr 1fr', gap: mobile ? 12 : 16 }}>
+            <div style={{ padding: mobile ? 12 : 16, background: c.greenBg, borderRadius: 12, border: `1px solid ${c.greenBorder}` }}>
               <div style={{ fontSize: 12, color: c.green, fontWeight: 700, marginBottom: 6 }}>{t.feeYield}</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: c.green }}>+{formatUsd(results.feeYieldUsd)}</div>
+              <div style={{ fontSize: mobile ? 16 : 18, fontWeight: 700, color: c.green }}>+{formatUsd(results.feeYieldUsd)}</div>
               <div style={{ fontSize: 11, color: c.textTertiary, marginTop: 4 }}>{t.compoundExtra}{formatUsd(results.compoundingGain)}</div>
             </div>
-            <div style={{ padding: 16, background: c.accentBg, borderRadius: 12, border: `1px solid ${c.orangeBorder}` }}>
+            <div style={{ padding: mobile ? 12 : 16, background: c.accentBg, borderRadius: 12, border: `1px solid ${c.orangeBorder}` }}>
               <div style={{ fontSize: 12, color: c.accent, fontWeight: 700, marginBottom: 6 }}>{t.farmYield}</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: c.accent }}>+{formatUsd(results.farmYieldUsd)}</div>
+              <div style={{ fontSize: mobile ? 16 : 18, fontWeight: 700, color: c.accent }}>+{formatUsd(results.farmYieldUsd)}</div>
               {results.farmDepreciationLoss > 0 && <div style={{ fontSize: 11, color: c.red, marginTop: 4 }}>{t.tokenLoss}{formatUsd(results.farmDepreciationLoss)}</div>}
             </div>
-            <div style={{ padding: 16, background: c.redBg, borderRadius: 12, border: `1px solid ${c.redBorder}` }}>
+            <div style={{ padding: mobile ? 12 : 16, background: c.redBg, borderRadius: 12, border: `1px solid ${c.redBorder}` }}>
               <div style={{ fontSize: 12, color: c.red, fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}><AlertTriangle size={12} />{t.il}</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: results.ilUsd === 0 ? c.textTertiary : c.red }}>{results.ilUsd === 0 ? '$0' : formatUsd(results.ilUsd)}</div>
+              <div style={{ fontSize: mobile ? 16 : 18, fontWeight: 700, color: results.ilUsd === 0 ? c.textTertiary : c.red }}>{results.ilUsd === 0 ? '$0' : formatUsd(results.ilUsd)}</div>
               <div style={{ fontSize: 11, color: c.textTertiary, marginTop: 4 }}>{formatPct(results.ilPercentage)}{t.ilNote}</div>
             </div>
-            <div style={{ padding: 16, background: results.effectiveApy >= 0 ? c.purpleBg : c.redBg, borderRadius: 12, border: `1px solid ${results.effectiveApy >= 0 ? c.purpleBorder : c.redBorder}` }}>
+            <div style={{ padding: mobile ? 12 : 16, background: results.effectiveApy >= 0 ? c.purpleBg : c.redBg, borderRadius: 12, border: `1px solid ${results.effectiveApy >= 0 ? c.purpleBorder : c.redBorder}` }}>
               <div style={{ fontSize: 12, color: results.effectiveApy >= 0 ? c.purple : c.red, fontWeight: 700, marginBottom: 6 }}>{t.netApy}</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: results.effectiveApy >= 0 ? c.purple : c.red }}>{formatPct(results.effectiveApy)}</div>
+              <div style={{ fontSize: mobile ? 16 : 18, fontWeight: 700, color: results.effectiveApy >= 0 ? c.purple : c.red }}>{formatPct(results.effectiveApy)}</div>
               <div style={{ fontSize: 11, color: c.textTertiary, marginTop: 4 }}>{t.apyNote}</div>
             </div>
           </div>
@@ -432,7 +480,7 @@ export default function App() {
           <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Info size={18} color={c.textTertiary} />{t.ammTitle}
           </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr 1fr', gap: mobile ? 12 : 16 }}>
             <div style={{ padding: 16, background: c.surfaceAlt, borderRadius: 12 }}>
               <div style={{ fontSize: 12, color: c.textTertiary, marginBottom: 6 }}>{t.ammEntry}</div>
               <div style={{ fontSize: 14, fontWeight: 600 }}>{formatUsd(results.initialUsdc)} + {formatBtc(results.initialBtcAmount)}</div>
